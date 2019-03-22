@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 class Filter
 {
@@ -23,6 +23,7 @@ public:
     inline void setCutoff(double newCutoff) { cutoff = newCutoff; calculateFeedbackAmount(); };
     inline void setResonance(double newResonance) { resonance = newResonance; calculateFeedbackAmount(); };
     inline void setFilterMode(FilterMode newMode) { mode = newMode; }
+    inline void resetFiler() { buf0 = 0.; buf1 = 0.; }
 private:
     double cutoff;
     double resonance;

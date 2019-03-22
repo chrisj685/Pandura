@@ -1,4 +1,4 @@
-﻿#include "Pandura.h"
+#include "Pandura.h"
 #include "IPlug_include_in_plug_src.h"
 #include "IControls.h"
 
@@ -12,14 +12,22 @@ Pandura::Pandura(IPlugInstanceInfo instanceInfo)
 
     _sampleRate = GetSampleRate();
 
+    _filter.setFilterMode(_filter.FILTER_MODE_LOWPASS);
+
     //on = true;
     //_midiNote = 65;
     //_frequency = midiToFreq(_midiNote);
 
-    GetParam(kGain)->InitDouble("Gain", 100., 0., 100.0, 0.01, "%");
-    GetParam(kFrequency)->InitDouble("Frequency", 440., 110., 1760., 0.01, "%");
+    GetParam(kGain)->InitDouble("Gain", 10., 0., 100.0, 0.01, "%");
+
+    GetParam(kAttack)->InitDouble("Attack", 750, 250, 100000, 250, "Steps", 0, "", IParam::ShapeExp());
+    GetParam(kDecay)->InitDouble("Decay", 750, 250, 100000, 250, "Steps", 0, "", IParam::ShapeExp());
+    GetParam(kSustain)->InitDouble("Sustain", 1., 0., 1., 0.01, "%");
+    GetParam(kRelease)->InitDouble("Release", 750, 250, 100000, 250, "Steps", 0, "", IParam::ShapeExp());
+
     GetParam(kCutoff)->InitFrequency("Cutoff", 0.99, 0.01, 0.99, 0.001);
     GetParam(kResonance)->InitDouble("Resonance", 0.01, 0.01, 1.0, 0.001);
+
     mMakeGraphicsFunc = [&]() {
         return MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, PLUG_FPS, 1.);
     };
@@ -30,7 +38,22 @@ Pandura::Pandura(IPlugInstanceInfo instanceInfo)
         pGraphics->LoadFont(ROBOTTO_FN);
         const IRECT b = pGraphics->GetBounds();
         pGraphics->AttachControl(new IVKnobControl(b.GetCentredInside(100).GetVShifted(-100), kGain));
-        pGraphics->AttachControl(new IVKnobControl(b.GetCentredInside(100).GetVShifted(100), kFrequency));
+
+        // Volume envelope controls
+        pGraphics->AttachControl(new IVKnobControl(b.GetCentredInside(100)
+          .GetVShifted(100)
+          .GetHShifted(-150), kAttack));
+        pGraphics->AttachControl(new IVKnobControl(b.GetCentredInside(100)
+          .GetVShifted(100)
+          .GetHShifted(-50), kDecay));
+        pGraphics->AttachControl(new IVKnobControl(b.GetCentredInside(100)
+          .GetVShifted(100)
+          .GetHShifted(50), kSustain));
+        pGraphics->AttachControl(new IVKnobControl(b.GetCentredInside(100)
+          .GetVShifted(100)
+          .GetHShifted(150), kRelease));
+
+        // Filter controls
         pGraphics->AttachControl(new IVKnobControl(b.GetCentredInside(100)
                                  .GetVShifted(200)
                                  .GetHShifted(-50), kCutoff));
@@ -52,25 +75,6 @@ void Pandura::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
     double output = 0.;
     double unfiltered = 0.;
 
-    /*
-    int newState = frequency > 880 ? 0 : 1;
-    if (_state != newState)
-    {
-        if (_state == 1)
-        {
-            _midiMap.removeOsc(65);
-            _midiMap.removeOsc(72);
-        }
-
-        if (newState == 1)
-        {
-            _midiMap.setActiveOsc(65, new OscState((1 / _sampleRate) * 440.));
-            _midiMap.setActiveOsc(72, new OscState((1 / _sampleRate) * 523));
-        }
-
-        _state = newState;
-    } */
-
     for (int s = 0; s < nFrames; s++)
     {
         output = 0.;
@@ -78,17 +82,15 @@ void Pandura::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
         for (int note : notes)
         {
             AmpEnv* env = _midiMap.getEnvState(note);
-            unfiltered += env->process();
+            output += env->process() * _gain;
 
             if (env->envState == DONE)
             {
                 _midiMap.removeEnv(note);
             }
-
-            output = _filter.process(unfiltered) * _gain;
-
-            
         }
+
+        output = _filter.process(output);
         for (int c = 0; c < nChans; c++)
         {
             outputs[c][s] = output;
@@ -98,8 +100,6 @@ void Pandura::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
 
 void Pandura::ProcessMidiMsg(const IMidiMsg & msg)
 {
-    TRACE;
-
     int status = msg.StatusMsg();
 
     AmpEnv* env = nullptr;
@@ -109,7 +109,6 @@ void Pandura::ProcessMidiMsg(const IMidiMsg & msg)
     case IMidiMsg::kNoteOn:
         _midiNote = msg.NoteNumber();
         _frequency = midiToFreq(_midiNote);
-        on = true;
         _midiMap.setActiveEnv(
             _midiNote, 
             new AmpEnv(
@@ -140,12 +139,27 @@ void Pandura::OnParamChange(int paramIdx)
     {
     case kGain:
         _gain = GetParam(kGain)->Value() / 100.;
+        break;
     case kCutoff:
         _cutoff = GetParam(kCutoff)->Value();
         _filter.setCutoff(_cutoff);
+        break;
     case kResonance:
         _resonance = GetParam(kResonance)->Value();
         _filter.setResonance(_resonance);
+        break;
+    case kAttack:
+        _attack = GetParam(kAttack)->Value();
+        break;
+    case kDecay:
+        _decay = GetParam(kDecay)->Value();
+        break;
+    case kSustain:
+        _sustain = GetParam(kSustain)->Value();
+        break;
+    case kRelease:
+        _release = GetParam(kRelease)->Value();
+        break;
 
     default:
         break;

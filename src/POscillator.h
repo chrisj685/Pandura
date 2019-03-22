@@ -19,6 +19,8 @@ inline double wrap(double x, double low = 0., double high = 1.)
 
 inline double lerp(double phase, const double* buffer, unsigned long int mask)
 {
+	return buffer[(int)phase];
+	/*
     const int intPart = (int)phase;
     const double fracPart = phase - intPart;
 
@@ -26,6 +28,7 @@ inline double lerp(double phase, const double* buffer, unsigned long int mask)
     const double b = buffer[(intPart + 1) & mask];
 
     return a + (b - a) * fracPart;
+	*/
 }
 
 class OscState

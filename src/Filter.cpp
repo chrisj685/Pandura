@@ -1,8 +1,8 @@
-﻿#include "Filter.h"
+#include "Filter.h"
 
 double Filter::process(double inputValue)
 {
-    buf0 += cutoff * (inputValue - buf0);
+    buf0 += cutoff * (inputValue - buf0 + feedbackAmount * (buf0 - buf1));
     buf1 += cutoff * (buf0 - buf1);
     switch (mode)
     {
